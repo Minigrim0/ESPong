@@ -1,92 +1,63 @@
 #include <FastLED.h>
 #include <cstdlib>
-#include <ctime>
 
-#define NUM_LEDS 8 * 32
-#define DATA_PIN D1
-#define PADDLE_LENGTH 3
+#include "ball.h"
+#include "const.h"
+#include "paddle.h"
+#include "color.h"
 
-bool randomPlay = true;
-CRGB leds[NUM_LEDS];
-
-unsigned int cycle;
-
-int points[2] = {0, 0};
-
-typedef struct paddle {
-  int id;
-  int y;
-} Paddle;
-
-typedef struct Ball {
-  int x;
-  int y;
-  int dir_x;
-  int dir_y;
-} Ball;
+#include "utils.h"
 
 Ball ball;
-Paddle paddles[2] = {(Paddle){.id = 0, .y = 2}, (Paddle){.id = 1, .y = 2}};
+GameMode game_mode = RANDOM;
+CRGB leds[NUM_LEDS];
+int angle;
 
-void resetBall() {
-  ball = {.x = 16,
-          .y = 3,
-          .dir_x = rand() % 2 == 0 ? 1 : -1,
-          .dir_y = rand() % 2 == 0 ? 1 : -1};
-}
+struct {
+  int x;
+  int y;
+} previous_positions[AMOUNT_TRAIL];
+
+unsigned int cycle;
+unsigned char bounces = 0;
+
+int points[2] = {0, 0};
+Paddle paddles[2] = {(Paddle){.id = 0, .y = 2}, (Paddle){.id = 1, .y = 2}};
 
 void setup() {
   FastLED.addLeds<WS2812, DATA_PIN, GRB>(leds, NUM_LEDS);
   cycle = 0;
+  angle = 0;
 
   Serial.begin(115200);
 
   randomSeed(analogRead(A0) * 100);
-  resetBall();
-}
-
-int CoordToIndex(int x, int y) {
-  if (x % 2 == 1) {
-    y = 7 - y;
-  }
-  return y + x * 8;
-}
-
-void displayPaddle(Paddle &paddle) {
-  for (int x = paddle.y; x < paddle.y + PADDLE_LENGTH; x++) {
-    leds[CoordToIndex(paddle.id * 31, x)] = CRGB(10, 0, 0);
-  }
-}
-
-void paddleDown(Paddle &paddle) {
-  if (paddle.y < 8 - PADDLE_LENGTH) {
-    paddle.y++;
-  }
-}
-
-void paddleUp(Paddle &paddle) {
-  if (paddle.y > 0) {
-    paddle.y--;
-  }
-}
-
-void updatePaddle(Paddle &paddle) {
-  switch (std::rand() % 3) {
-  case 0:
-    paddleUp(paddle);
-    break;
-  case 1:
-    paddleDown(paddle);
-    break;
-  default:
-    break;
-  }
+  resetBall(ball);
 }
 
 void resetMatrix() {
   for (int x = 0; x < NUM_LEDS; x++) {
     leds[x] = CRGB::Black;
   }
+}
+
+void resetPreviousPos() {
+    for(int i=0;i<AMOUNT_TRAIL;i++) {
+        previous_positions[i] = {0,0};
+    }
+}
+
+void shiftPreviousPos() {
+    for(int i = AMOUNT_TRAIL - 1; i >= 0; i--) {
+        previous_positions[i] = previous_positions[i - 1];
+    }
+}
+
+void displayPreviousPos() {
+    for(int i=0;i < AMOUNT_TRAIL;i++) {
+        leds[CoordToIndex(previous_positions[i].x, previous_positions[i].y)] = hue_to_rgb(angle - i, 1, 0.5);
+        leds[CoordToIndex(previous_positions[i].x, previous_positions[i].y)].fadeToBlackBy(5 * i);
+    }
 }
 
 void endGame(int winner) {
@@ -100,67 +71,86 @@ void endGame(int winner) {
     FastLED.show();
     delay(100);
   }
-  resetBall();
+  resetBall(ball);
   cycle = 0;
 }
 
-void updateBall(Ball &ball, Paddle paddles[2]) {
-  if (ball.dir_y == 1 && ball.y == 7) {
-    ball.dir_y = -1;
-  } else if (ball.dir_y == -1 && ball.y == 0) {
-    ball.dir_y = 1;
+void toggleGameType() {
+  switch (game_mode) {
+  case RANDOM:
+    game_mode = MANUAL;
+    break;
+  case MANUAL:
+    game_mode = SMART;
+    break;
+  case SMART:
+    game_mode = RANDOM;
+    break;
+  default:
+    game_mode = RANDOM;
+    break;
   }
-
-  if (ball.x == 30 && ball.dir_x == 1 &&
-      ball.y <= paddles[1].y + PADDLE_LENGTH && ball.y >= paddles[1].y) {
-    ball.dir_x = -1;
-  }
-  if (ball.x == 1 && ball.dir_x == -1 &&
-      ball.y <= paddles[0].y + PADDLE_LENGTH && ball.y >= paddles[0].y) {
-    ball.dir_x = 1;
-  }
-
-  ball.x += ball.dir_x;
-  ball.y += ball.dir_y;
 }
 
-void displayBall(Ball &ball) {
-  leds[CoordToIndex(ball.x, ball.y)] = CRGB(0, 10, 10);
+void readInput(unsigned char res) {
+  switch (res) {
+  case 'w':
+    paddleUp(paddles[0]);
+    break;
+  case 's':
+    paddleDown(paddles[0]);
+    break;
+  case 'i':
+    paddleUp(paddles[1]);
+    break;
+  case 'k':
+    paddleDown(paddles[1]);
+    break;
+  case 'r':
+    resetBall(ball);
+    break;
+  default:
+    break;
+  }
 }
-
-void toggleGameType() { randomPlay = !randomPlay; }
 
 void loop() {
-    delay(50);
-    cycle++;
+  delay(50);
+  cycle++;
+  if (cycle % 2 == 0) {
+      angle++;
+  }
 
-
-    int res = Serial.read();
-  if(!randomPlay) {
-    switch (res) {
-    case 'w':
-        paddleUp(paddles[0]);
-        break;
-    case 's':
-        paddleDown(paddles[0]);
-        break;
-    case 'i':
-        paddleUp(paddles[1]);
-        break;
-    case 'k':
-        paddleDown(paddles[1]);
-        break;
-    case 'r':
-        resetBall();
-        break;
-    default:
-        break;
-    }
-  } else {
-      if (cycle % 3 == 0) {
-        updatePaddle(paddles[0]);
+  int res = Serial.read();
+  switch (game_mode) {
+  case MANUAL:
+    readInput(res);
+    break;
+  case SMART:
+    if (ball.dir_x > 0) {
+      if (ball.x > 25) {
+        updatePaddleSmart(ball, paddles[1]);
+      } else {
         updatePaddle(paddles[1]);
       }
+      updatePaddle(paddles[0]);
+    } else {
+      if (ball.x < 6) {
+        updatePaddleSmart(ball, paddles[0]);
+      } else {
+        updatePaddle(paddles[0]);
+      }
+      updatePaddle(paddles[1]);
+    }
+    break;
+  case RANDOM:
+    if (cycle % 3 == 0) {
+      updatePaddle(paddles[0]);
+      updatePaddle(paddles[1]);
+    }
+    break;
+  default:
+    break;
   }
 
   // Small delay before start
@@ -172,7 +162,10 @@ void loop() {
     toggleGameType();
   }
 
+  shiftPreviousPos();
+  previous_positions[0] = {ball.x, ball.y};
   updateBall(ball, paddles);
+
   if (ball.x < 0) {
     endGame(1);
   } else if (ball.x > 31) {
@@ -181,10 +174,11 @@ void loop() {
 
   resetMatrix();
 
-  displayPaddle(paddles[0]);
-  displayPaddle(paddles[1]);
+  displayPaddle(leds, paddles[0]);
+  displayPaddle(leds, paddles[1]);
 
-  displayBall(ball);
+  displayPreviousPos();
+  displayBall(leds, ball, angle);
 
   FastLED.show();
 }
