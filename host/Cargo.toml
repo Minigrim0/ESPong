@@ -1,0 +1,9 @@
+[package]
+name = "host"
+description = "A client program that reads keyboard inputs and sends them via serial"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+evdev = "0.12.2"
+serialport = "4.6.1"
