@@ -63,6 +63,10 @@ fn main() {
         }
     };
 
+    let output = "Hello World!\n".to_string().into_bytes();
+    port.write(&output).expect("Write failed!");
+    return;
+
     match find_keyboard() {
         Some(mut keyboard) => loop {
             match keyboard.fetch_events() {

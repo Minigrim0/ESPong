@@ -2,9 +2,9 @@
 #include <cstdlib>
 
 #include "ball.h"
+#include "color.h"
 #include "const.h"
 #include "paddle.h"
-#include "color.h"
 
 #include "utils.h"
 
@@ -42,22 +42,22 @@ void resetMatrix() {
 }
 
 void resetPreviousPos() {
-    for(int i=0;i<AMOUNT_TRAIL;i++) {
-        previous_positions[i] = {0,0};
-    }
+  for (int i = 0; i < AMOUNT_TRAIL; i++) {
+    previous_positions[i] = {0, 0};
+  }
 }
 
 void shiftPreviousPos() {
-    for(int i = AMOUNT_TRAIL - 1; i >= 0; i--) {
-        previous_positions[i] = previous_positions[i - 1];
-    }
+  for (int i = AMOUNT_TRAIL - 1; i >= 0; i--) {
+    previous_positions[i] = previous_positions[i - 1];
+  }
 }
 
 void displayPreviousPos() {
-    for(int i=0;i < AMOUNT_TRAIL;i++) {
-        leds[CoordToIndex(previous_positions[i].x, previous_positions[i].y)] = hue_to_rgb(angle - i, 1, 0.5);
-        leds[CoordToIndex(previous_positions[i].x, previous_positions[i].y)].fadeToBlackBy(5 * i);
-    }
+  for (int i = 0; i < AMOUNT_TRAIL; i++) {
+    leds[CoordToIndex(previous_positions[i].x, previous_positions[i].y)] =
+        hue_to_rgb(angle - i, 1, 0.5).fadeToBlackBy(5 * i);
+  }
 }
 
 void endGame(int winner) {
@@ -117,9 +117,7 @@ void readInput(unsigned char res) {
 void loop() {
   delay(50);
   cycle++;
-  if (cycle % 2 == 0) {
-      angle++;
-  }
+  angle++;
 
   int res = Serial.read();
   switch (game_mode) {
